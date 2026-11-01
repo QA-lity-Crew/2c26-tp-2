@@ -25,3 +25,4 @@ pubkey
 *.pem
 *.bak
 .vscode
+start.sh
