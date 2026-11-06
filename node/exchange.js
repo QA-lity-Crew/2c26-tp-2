@@ -1,5 +1,7 @@
 import { nanoid } from "nanoid";
 import * as state from "./state.js";
+import axios from 'axios';
+import config from './config.js'
 //import { emitExchangeMetrics } from "./metrics.js";
 
 export const init = state.init;
@@ -10,6 +12,7 @@ export const setAccountBalance = state.setAccountBalance;
 
 export const EXCHANGE_ERROR_CODES = Object.freeze({
   RATE_CHANGED: "RATE_CHANGED",
+  ARCA_ERROR: "ARCA_ERROR",
 });
 
 export async function setRate({ baseCurrency, counterCurrency, rate }) {
@@ -24,6 +27,7 @@ export async function exchange(exchangeRequest) {
     counterAccountId: clientCounterAccountId,
     baseAmount,
     expectedRate,
+    dni
   } = exchangeRequest;
 
   const exchangeRate = await state.getRate(baseCurrency, counterCurrency);
@@ -39,7 +43,27 @@ export async function exchange(exchangeRequest) {
     counterAmount: 0.0,
     obs: null,
     error: null,
+    arcaOk: false,
+    arcaAuthCode: null,
+    dni: dni
   };
+
+  try {
+        const response = await axios.post(`${config.arcaUri}/validar`, {dni: parseInt(dni)});
+        if (response.status == 200) {
+            exchangeResult.arcaOk = true;
+            exchangeResult.arcaAuthCode = response.data.codigoAutorizacion;
+        } else {
+            exchangeResult.error = EXCHANGE_ERROR_CODES.ARCA_ERROR;
+            exchangeResult.obs = `Unexpected return code ${response.status} from ARCA`;
+            return exchangeResult;
+        }
+  } catch (e) {
+        console.error("Exception consuming ARCA's service", e);
+        exchangeResult.error = EXCHANGE_ERROR_CODES.ARCA_ERROR;
+        exchangeResult.obs = "Exception consuming ARCA's service";
+        return exchangeResult;
+  }
 
   if (expectedRate !== exchangeRate) {
     exchangeResult.error = EXCHANGE_ERROR_CODES.RATE_CHANGED;

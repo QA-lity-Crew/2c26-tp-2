@@ -70,6 +70,7 @@ app.post("/exchange", async (req, res) => {
     counterAccountId,
     baseAmount,
     expectedRate,
+    dni
   } = req.body;
 
   if (
@@ -79,7 +80,8 @@ app.post("/exchange", async (req, res) => {
     !counterAccountId ||
     !baseAmount ||
     !Number.isFinite(expectedRate) ||
-    expectedRate <= 0
+    expectedRate <= 0 ||
+    !dni
   ) {
     return res.status(400).json({ error: "Malformed request" });
   }
