@@ -93,6 +93,8 @@ app.post("/exchange", async (req, res) => {
     res.status(200).json(exchangeResult);
   } else if (exchangeResult.error === EXCHANGE_ERROR_CODES.RATE_CHANGED) {
     res.status(409).json(exchangeResult);
+  } else if (exchangeResult.error === EXCHANGE_ERROR_CODES.ARCA_ERROR) {
+    res.status(422).json(exchangeResult);
   } else {
     res.status(500).json(exchangeResult);
   }

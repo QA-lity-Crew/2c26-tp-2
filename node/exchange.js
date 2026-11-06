@@ -51,7 +51,7 @@ export async function exchange(exchangeRequest) {
   try {
         const response = await axios.post(`${config.arcaUri}/validar`, {dni: parseInt(dni)});
         if (response.status == 200) {
-            exchangeResult.arcaOk = true;
+            exchangeResult.arcaOk = response.data.ok == "true" ? true : false;
             exchangeResult.arcaAuthCode = response.data.codigoAutorizacion;
         } else {
             exchangeResult.error = EXCHANGE_ERROR_CODES.ARCA_ERROR;
@@ -63,6 +63,13 @@ export async function exchange(exchangeRequest) {
         exchangeResult.error = EXCHANGE_ERROR_CODES.ARCA_ERROR;
         exchangeResult.obs = "Exception consuming ARCA's service";
         return exchangeResult;
+  }
+
+  if (!exchangeResult.arcaOk) {
+    exchangeResult.error = EXCHANGE_ERROR_CODES.ARCA_ERROR;
+    exchangeResult.obs = "ARCA did not authorize the transaction";
+    await state.appendLog(exchangeResult);
+    return exchangeResult;
   }
 
   if (expectedRate !== exchangeRate) {
