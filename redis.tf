@@ -1,10 +1,5 @@
-# redis.tf
-#
 # Storage del servicio: Azure Managed Redis (PaaS) y archivo de configuración
 # con los datos de conexión, generado al crear la infraestructura.
-# No fue validado con `terraform validate` por quien lo redactó: correlo antes de aplicar.
-
-# El nombre del recurso debe ser único en Azure (forma parte del hostname).
 resource "random_string" "redis_name" {
   length  = 10
   lower   = true
@@ -38,7 +33,6 @@ resource "azurerm_managed_redis" "tp2_redis" {
 
 # Archivo de configuración que lee node/state.js. Se genera al crear la infraestructura
 # y viaja en el zip que despliega ansible/deploy.sh.
-# CONTIENE LA CLAVE DE ACCESO: agregá node/redis.json al .gitignore y no lo commitees.
 resource "local_sensitive_file" "redis_config" {
   filename        = "${path.module}/node/redis.json"
   file_permission = "0644"
