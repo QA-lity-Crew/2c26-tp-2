@@ -1,7 +1,6 @@
 import express from 'express';
 import axios from 'axios';
-import config from './config.js'
-
+import config from './config.js';
 
 import {
   init as exchangeInit,
@@ -16,14 +15,13 @@ import {
 
 await exchangeInit();
 
-
 const app = express();
 const port = 3000;
 
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.status(200).send('Server is up.')
+    res.status(200).send('Server is up.');
 });
 
 // ACCOUNT endpoints
@@ -33,7 +31,7 @@ app.get("/accounts", async (req, res) => res.json(await getAccounts()));
 app.put("/accounts/:id/balance", async (req, res) => {
   const { balance } = req.body;
 
-  if (!req.params.id || !balance) {
+  if (!req.params.id || balance === undefined || balance === null) {
     return res.status(400).json({ error: "Malformed request" });
   }
 
@@ -70,7 +68,7 @@ app.post("/exchange", async (req, res) => {
     counterAccountId,
     baseAmount,
     expectedRate,
-    dni
+    dni,
   } = req.body;
 
   if (
@@ -93,28 +91,34 @@ app.post("/exchange", async (req, res) => {
     res.status(200).json(exchangeResult);
   } else if (exchangeResult.error === EXCHANGE_ERROR_CODES.RATE_CHANGED) {
     res.status(409).json(exchangeResult);
-  } else if (exchangeResult.error === EXCHANGE_ERROR_CODES.ARCA_ERROR) {
+  } else if (exchangeResult.error === EXCHANGE_ERROR_CODES.ARCA_UNAUTHORIZED) {
+    // Restricción fiscal del usuario devuelta por ARCA
     res.status(422).json(exchangeResult);
+  } else if (exchangeResult.error === EXCHANGE_ERROR_CODES.ARCA_ERROR) {
+    // Timeout, indisponibilidad o falla de red con ARCA
+    res.status(502).json(exchangeResult);
+  } else if (exchangeResult.error === EXCHANGE_ERROR_CODES.INSUFFICIENT_FUNDS) {
+    res.status(400).json(exchangeResult);
   } else {
     res.status(500).json(exchangeResult);
   }
 });
 
-// ARCA endpoint
+// ARCA diagnostic endpoint
 
-app.get('/:dni', async (req, res) => {
+app.get('/arca/:dni', async (req, res) => {
     try {
-        const response = await axios.post(`${config.arcaUri}/validar`, {dni: parseInt(req.params.dni)});
-        if (response.status == 200) {
-            res.status(200).send(response.data);
-        } else {
-            res.status(500).send(`Unexpected return code ${response.status} from ARCA`);
-        }
+        const response = await axios.post(
+          `${config.arcaUri}/validar`,
+          { dni: String(req.params.dni) },
+          { timeout: 2000 }
+        );
+        res.status(response.status).json(response.data);
     } catch (e) {
-        console.error("Exception consuming ARCA's service", e);
-        res.status(500).send("Exception consuming ARCA's service");
+        console.error("Exception consuming ARCA service directly:", e.message);
+        res.status(502).json({ error: "ARCA service unavailable", message: e.message });
     }
-})
+});
 
 app.listen(port, () => {
   console.log(`Exchange API listening on port ${port}`);
