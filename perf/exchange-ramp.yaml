@@ -1,0 +1,37 @@
+config:
+  target: "{{ $processEnvironment.TARGET }}"
+  phases:
+    - name: "Warm-up"
+      duration: 30
+      arrivalRate: 5
+    - name: "Ramp-up"
+      duration: 60
+      arrivalRate: 5
+      rampTo: 30
+    - name: "Sustained-load"
+      duration: 60
+      arrivalRate: 30
+  plugins:
+    publish-metrics:
+      - type: datadog
+        apiKey: "{{ $processEnvironment.DATADOG_API_KEY }}"
+        apiHost: "us5.datadoghq.com"
+        prefix: "artillery."
+        tags:
+          - "test:exchange-ramp"
+          - "nodes:1"
+
+scenarios:
+  - name: "Exchange con validación de ARCA"
+    flow:
+      - post:
+          url: "/exchange"
+          json:
+            baseCurrency: "USD"
+            counterCurrency: "ARS"
+            baseAccountId: 2
+            counterAccountId: 1
+            baseAmount: 1
+            expectedRate: 1513
+            dni: "{{ $randomNumber(1000000, 99999999) }}"
+
