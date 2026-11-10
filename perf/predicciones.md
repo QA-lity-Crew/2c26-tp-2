@@ -43,3 +43,23 @@ Mismo sistema y mismo flujo, pero con rampa de 10 a 150 req/s en 120 s y 60 s so
 * **ARCA:** corre con 0.5 vCPU. Con 30 req/s su latencia no cambió respecto de 5 req/s, pero ahora recibirá unas 5 veces más llamadas.
 * **VM:** Node usa un solo proceso, así que solo aprovecha un núcleo de los dos. Y la `B2ats_v2` es burstable (baseline de 20% por vCPU), por lo que si la prueba es larga puede agotar créditos. Lo esperamos como segundo candidato.
 * **Redis:** esperamos que no sea el límite, porque son pocas operaciones por request.
+
+## Caso 1 nodo, búsqueda del punto de quiebre (`exchange-breakpoint.yaml`)
+
+Mismo flujo, con rampa de 20 a 450 req/s en 180 s y 60 s sostenidos a 450 req/s (~70000 requests). La prueba a 150 req/s no mostró degradación (mediana de 200 en 1153 ms, 0 fallas, CPU máxima de 11,8%), así que esta busca el límite de 1 nodo.
+
+### Predicción
+
+| Métrica | Valor |
+|---|---|
+| Req/s donde empieza a degradarse la latencia | 350-450 req/s |
+| CPU de la VM en la meseta | 30-40% (promedio de los dos núcleos) |
+| Errores (timeouts, ECONNRESET) | aparecen en la meseta de 450 req/s |
+| Primer componente en saturar | ARCA |
+
+### Razonamiento
+
+* **VM:** la CPU creció de forma lineal, 11,8% a 150 req/s. Extrapolando, a 450 req/s serían ~35% de promedio, o ~70% de un núcleo, que es lo que usa Node con un solo proceso. Queda cerca del límite, pero sin saturar.
+* **ARCA:** corre con 0.5 vCPU. A 450 req/s recibe unas 450 llamadas por segundo, 3 veces más que en la prueba anterior, y es el componente con menos margen.
+* **Si ARCA satura:** debería verse como más latencia y más errores en las llamadas a `/validar`, que terminan como 422, mientras la CPU de la VM sigue por debajo del 50%.
+* **Límite del generador:** Artillery corre con un solo proceso en la computadora de quien lo ejecuta. Si la CPU de esa máquina se satura, el límite es del generador y la prueba no es válida.
