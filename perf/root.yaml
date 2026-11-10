@@ -7,7 +7,7 @@ config:
     publish-metrics:
       - type: datadog
         apiKey: "{{ $processEnvironment.DATADOG_API_KEY }}"
-        apiHost: "us5.datadoghq.com"
+        apiHost: "datadoghq.com"
         prefix: "artillery."
         tags:
           - "test:root"
