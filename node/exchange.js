@@ -51,7 +51,7 @@ export async function exchange(exchangeRequest) {
   try {
         const response = await axios.post(`${config.arcaUri}/validar`, {dni: parseInt(dni)});
         if (response.status == 200) {
-            exchangeResult.arcaOk = response.data.ok == "true" ? true : false;
+            exchangeResult.arcaOk = (response.data.ok === true || response.data.ok === "true");
             exchangeResult.arcaAuthCode = response.data.codigoAutorizacion;
         } else {
             exchangeResult.error = EXCHANGE_ERROR_CODES.ARCA_ERROR;
