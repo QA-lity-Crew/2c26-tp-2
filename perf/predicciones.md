@@ -23,3 +23,23 @@ Escenario `perf/exchange-ramp.yaml` (hasta 30 req/s, ~3000 requests). 1 VM `Stan
 * **Respuestas 422:** terminan en ARCA y no llegan a `transfer()`, por eso son más rápidas.
 * **Errores:** salen de probar ~30 DNIs al azar contra `/:dni`: ~70% aprobó, ~23% rechazó y ~7% falló.
 * **Cuello de botella:** a 30 req/s hay ~30 requests en vuelo y Node espera casi todo el tiempo (en el TP1 aguantó ~500 req/s con 1 CPU), así que no esperamos que sature. Si algo se degrada, será ARCA por su límite de CPU.
+
+## Caso 1 nodo, carga alta (`exchange-stress.yaml`)
+
+Mismo sistema y mismo flujo, pero con rampa de 10 a 150 req/s en 120 s y 60 s sostenidos a 150 req/s (~14000 requests). La prueba anterior (30 req/s) no mostró degradación, así que esta busca el punto de quiebre.
+
+### Predicción
+
+| Métrica | Valor |
+|---|---|
+| Req/s donde empieza a degradarse la latencia | 80-120 req/s |
+| Mediana de respuestas 200 a 150 req/s | > 2 s |
+| Timeouts / errores de red | sí, en la meseta de 150 req/s |
+| 422 | ~50%, sube si ARCA empieza a fallar |
+| Primer componente en saturar | ARCA |
+
+### Razonamiento
+
+* **ARCA:** corre con 0.5 vCPU. Con 30 req/s su latencia no cambió respecto de 5 req/s, pero ahora recibirá unas 5 veces más llamadas.
+* **VM:** Node usa un solo proceso, así que solo aprovecha un núcleo de los dos. Y la `B2ats_v2` es burstable (baseline de 20% por vCPU), por lo que si la prueba es larga puede agotar créditos. Lo esperamos como segundo candidato.
+* **Redis:** esperamos que no sea el límite, porque son pocas operaciones por request.
