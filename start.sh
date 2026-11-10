@@ -14,7 +14,7 @@ fi
 
 # Sign in to Azure
 echo "##### Logging into Azure #####"
-az login
+az login --use-device-code
 
 # Create infrastructure. This also sets ARCA service's IP in the node app so that they can communicate
 # The -auto-approve flag makes it not to ask for plan approval. Use at your own risk!
