@@ -1,5 +1,7 @@
 config:
   target: "{{ $processEnvironment.TARGET }}"
+  http:
+    pool: 600
   phases:
     - name: "Warm-up"
       duration: 20

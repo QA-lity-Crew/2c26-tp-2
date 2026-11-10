@@ -63,3 +63,26 @@ Mismo flujo, con rampa de 20 a 450 req/s en 180 s y 60 s sostenidos a 450 req/s 
 * **ARCA:** corre con 0.5 vCPU. A 450 req/s recibe unas 450 llamadas por segundo, 3 veces más que en la prueba anterior, y es el componente con menos margen.
 * **Si ARCA satura:** debería verse como más latencia y más errores en las llamadas a `/validar`, que terminan como 422, mientras la CPU de la VM sigue por debajo del 50%.
 * **Límite del generador:** Artillery corre con un solo proceso en la computadora de quien lo ejecuta. Si la CPU de esa máquina se satura, el límite es del generador y la prueba no es válida.
+
+## Caso 1 nodo, saturación (`exchange-saturation.yaml`)
+
+Mismo flujo, con pool de conexiones y rampa de 100 a 1500 req/s en 300 s, más 60 s sostenidos a 1500 req/s (~330000 requests). La prueba a 450 req/s no mostró degradación (0 errores, mediana de 200 en 1153 ms) y la CPU de la VM llegó a 27,5%. Esta busca el límite de 1 nodo.
+
+### Predicción
+
+| Métrica | Valor |
+|---|---|
+| Req/s donde empieza a degradarse la latencia | 700-1000 req/s |
+| CPU de la VM | sube hasta ~50% (promedio de los dos núcleos) y se aplana |
+| Throughput | se aplana en ~800-1000 req/s, aunque la carga siga subiendo |
+| Primer componente en saturar | el proceso único de Node en la VM |
+
+### Razonamiento
+
+* **VM:** la CPU promedio creció a ~0,06% por cada req/s (27,5% a 450 req/s). Node usa un solo proceso, es decir un solo núcleo de los dos, así que ese núcleo llega al 100% (50% de promedio) cerca de los ~800-1000 req/s (la CPU `user` no cuenta el tiempo del kernel por la red, así que el límite real puede estar un poco antes).
+* **Cómo se ve si satura Node:** la CPU promedio se aplana en ~50% mientras la carga sigue subiendo, y la latencia empieza a crecer.
+* **Alternativa:** la `B2ats_v2` es burstable, con baseline de 20% por vCPU. Si se agotan los créditos, la CPU se aplanaría en ~20% de promedio, y no en ~50%.
+* **ARCA:** no mostró señales de saturación hasta 450 req/s (latencia sin cambios). La esperamos como segundo candidato.
+* **Límite del generador:** con 1500 req/s Artillery puede saturar la computadora de quien lo corre. Si su CPU llega al 100% o aparecen errores de red desde el inicio, la prueba no vale.
+* **Cómo distinguir VM de ARCA:** si la latencia sube y la CPU de la VM se aplana en ~50%, el límite es Node. Si la latencia sube pero la CPU de la VM queda por debajo del 50%, el límite es ARCA.
+* **Saldo de la cuenta:** cada operación aprobada descuenta 1513 ARS de la cuenta 1. Antes de correr se repone el saldo (PUT `/accounts/1/balance`) para que no se agote durante la prueba.
