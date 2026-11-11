@@ -1,0 +1,6 @@
+{
+  "instancias": 1,
+  "nombre": "tp2vmss",
+  "region": "westus2",
+  "tamanio": "Standard_B2ats_v2"
+}
