@@ -86,3 +86,27 @@ Mismo flujo, con pool de conexiones y rampa de 100 a 1500 req/s en 300 s, más 6
 * **Límite del generador:** con 1500 req/s Artillery puede saturar la computadora de quien lo corre. Si su CPU llega al 100% o aparecen errores de red desde el inicio, la prueba no vale.
 * **Cómo distinguir VM de ARCA:** si la latencia sube y la CPU de la VM se aplana en ~50%, el límite es Node. Si la latencia sube pero la CPU de la VM queda por debajo del 50%, el límite es ARCA.
 * **Saldo de la cuenta:** cada operación aprobada descuenta 1513 ARS de la cuenta 1. Antes de correr se repone el saldo (PUT `/accounts/1/balance`) para que no se agote durante la prueba.
+
+## Caso 2 nodos (`exchange-saturation.yaml`)
+
+Mismo escenario que en 1 nodo (rampa de 100 a 1500 req/s y 60 s sostenidos), con `instances = 2` en el VMSS. En 1 nodo el servicio aguantó los 1500 req/s sin errores propios (CPU máxima de 57,8%, mediana de 200 en 1274 ms) y el generador empezó a fallar desde ~1330 req/s.
+
+### Predicción
+
+| Métrica | Valor |
+|---|---|
+| ¿El throughput escala proporcionalmente? | No se va a poder ver: el generador limita antes que el sistema (~1330-1500 req/s) |
+| CPU de la VM por nodo | ~25-35% cada uno (la mitad de 57,8%) |
+| Mediana de respuestas 200 | 1150-1250 ms, sin el aumento que hubo en 1 nodo cerca de 1000 req/s |
+| p95 de respuestas 200 | 1,3-1,5 s |
+| Errores del servicio (5xx, timeouts) | 0 |
+| Errores `EHOSTUNREACH` del generador | ~1%, parecido a 1 nodo |
+| CPU de ARCA | ~65% (327 de 500 millicores), igual que en 1 nodo |
+| Primer componente en limitar si se pudiera subir la carga | ARCA, cerca de ~2000-2300 req/s |
+
+### Razonamiento
+
+* **Reparto:** el load balancer reparte los requests entre las dos VMs, así que cada una recibe la mitad de la carga y cada proceso de Node queda con la mitad de CPU. Por eso esperamos que la rodilla de latencia de ~1000 req/s en 1 nodo no aparezca.
+* **Escalado:** la capacidad de las VMs se duplicaría (~2000 req/s en lugar de ~1000), pero desde una sola máquina no podemos ofrecer más de ~1330-1500 req/s sin errores de red. El resultado se va a parecer a 1 nodo en throughput y va a mejorar en latencia y CPU por nodo.
+* **ARCA y Redis:** son únicos y compartidos, no escalan con los nodos. ARCA recibe la misma carga total que en 1 nodo, por lo que su CPU no debería cambiar; con 327 de 500 millicores a 1500 req/s llegaría a su límite cerca de ~2000-2300 req/s. Redis (una sola instancia B0) no mostró señales de saturación en 1 nodo.
+* **Comparabilidad:** el despliegue se recreó con el mismo Terraform, la misma región y los mismos tamaños. Solo cambia la cantidad de instancias.
