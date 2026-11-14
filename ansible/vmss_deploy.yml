@@ -3,7 +3,10 @@
   gather_facts: yes
   tasks:
     - name: Stop old version
-      command: pm2 stop app.js
+      command: pm2 stop all
+      ignore_errors: yes
+    - name: Delete old pm2 processes
+      command: pm2 delete all
       ignore_errors: yes
     - name: Extract new version
       unarchive:
@@ -13,5 +16,5 @@
         group: azureuser
     - name: Install dependencies
       command: npm install
-    - name: Start new version
-      command: pm2 start app.js
+    - name: Start new version in cluster mode (2 workers for 2 vCPUs)
+      command: pm2 start app.js -i 2
