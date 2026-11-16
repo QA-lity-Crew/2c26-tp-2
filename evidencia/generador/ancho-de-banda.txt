@@ -1,0 +1,8 @@
+Medición de ancho de banda del generador (misma máquina y misma conexión de las pruebas de carga), contra speed.cloudflare.com
+Subida medida el 2026-11-16T07:07:49Z; bajada medida minutos después, el mismo día.
+
+bajada: 11256875 bytes/s (descarga de 25000000 bytes, HTTP 200)  = 90,05 Mbit/s
+subida: 11468179 bytes/s (envío de 50000000 bytes)                = 91,75 Mbit/s
+
+Mbit/s = bytes/s x 8 / 1.000.000
+Nota: un primer intento de bajada con 100000000 bytes recibió HTTP 403 (el servidor rechazó ese tamaño) y se descartó; la bajada informada es la de 25000000 bytes.
