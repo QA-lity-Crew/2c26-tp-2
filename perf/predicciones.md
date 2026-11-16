@@ -25,3 +25,25 @@
 * **ARCA y Redis:** ARCA recibe solo lo que la VM logra atender, así que no esperamos que sature ni que devuelva 5xx. Redis tiene pocas operaciones por request y no esperamos que limite.
 * **Límite del generador:** Artillery corre con un solo proceso en la computadora de quien lo ejecuta y no puede ofrecer mucho más de ~1330-1500 req/s sin errores de red. Esperamos que la VM sature antes. Si aparecen `EHOSTUNREACH` desde el inicio o la CPU del generador llega al 100%, la prueba no vale.
 * **Saldo de la cuenta:** cada operación aprobada descuenta 1513 ARS de la cuenta 1. Antes de correr se repone el saldo (PUT `/accounts/1/balance`) para que no se agote durante la prueba.
+
+## Caso 1 nodo, carga más alta (`exchange-saturation-3000.yaml`)
+
+Mismo sistema y mismo flujo, con rampa de 100 a 3000 req/s en 360 s y 60 s sostenidos a 3000 req/s (~740000 requests). La prueba anterior (hasta 1500 req/s) no mostró saturación: 0 5xx, 20 errores de red sobre 332000 requests, mediana de 200 en 1153 ms y `system.cpu.user` máximo de ~61%. Esta prueba busca el límite de 1 nodo.
+
+### Predicción
+
+| Métrica | Valor |
+|---|---|
+| Throughput efectivo máximo | 1500-1900 req/s, aunque la carga ofrecida suba hasta 3000 |
+| Primer componente en limitar | el generador (la computadora de quien corre Artillery o su red), no la VM |
+| Errores `EHOSTUNREACH` / `ECONNRESET` | aparecen desde ~1500 req/s y crecen en la meseta |
+| CPU de la VM (`system.cpu.user`) | máximo de 60-75% |
+| Mediana de respuestas 200 | 1100-1500 ms, sin degradación marcada |
+| 5xx de ARCA | 0 |
+
+### Razonamiento
+
+* **VM:** `system.cpu.user` creció linealmente hasta ~61% a 1500 req/s, lo que da ~0,4 ms de CPU por request. Si sigue lineal, el 100% de CPU de usuario estaría cerca de 2500 req/s (menos con el kernel y el agente). Es una extrapolación y no una medición.
+* **Generador:** en pruebas previas con otra VM, el throughput efectivo desde esta computadora se estancó cerca de 1500 req/s aunque se ofrecieran más, con errores `EHOSTUNREACH` que salían del lado del generador. Por eso esperamos que el generador limite antes que la VM.
+* **Cómo distinguir:** si el throughput efectivo se aplana en ~1500-1900 req/s con la CPU de la VM por debajo del 80% y con errores de red, el límite es el generador. Si el throughput se aplana con la CPU de la VM cerca del 100% y la latencia crece, el límite es la VM.
+* **Saldo de la cuenta:** se repone el saldo (PUT `/accounts/1/balance` con 1000000000) antes de correr. Con ~370000 operaciones aprobadas se descuentan ~560 millones de ARS.
