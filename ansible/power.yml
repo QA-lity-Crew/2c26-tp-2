@@ -1,0 +1,199 @@
+# Ejecutar desde la raiz del repositorio, con la sesion de Azure del TP activa:
+# ansible-playbook -i ansible/vmss_hosts ansible/power.yml -e tp2_power=pause
+# ansible-playbook -i ansible/vmss_hosts ansible/power.yml -e tp2_power=resume
+# ansible-playbook -i ansible/vmss_hosts ansible/power.yml -e tp2_power=status
+# status solo consulta: no cambia el estado de las maquinas ni reinicia la API.
+# Conserva Redis, ARCA, discos, balanceador e IP publicas; siguen generando cargos.
+---
+- name: Pausar o reanudar las maquinas del TP
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    tp2_resource_group: tp2_resource_group
+    tp2_subscription: 1d9a0d8a-cedd-4245-bb0a-48831c83043a
+    tp2_expected_power_state: "{{ 'PowerState/deallocated' if tp2_power == 'pause' else 'PowerState/running' }}"
+  tasks:
+    - name: Verificar la accion solicitada
+      ansible.builtin.assert:
+        that:
+          - tp2_power is defined
+          - tp2_power in ['pause', 'resume', 'status']
+        fail_msg: "Indica -e tp2_power=pause, resume o status."
+
+    - name: Cambiar el estado de las maquinas conservando sus discos
+      ansible.builtin.command:
+        argv:
+          - az
+          - "{{ item.kind }}"
+          - "{{ 'deallocate' if tp2_power == 'pause' else 'start' }}"
+          - --subscription
+          - "{{ tp2_subscription }}"
+          - --resource-group
+          - "{{ tp2_resource_group }}"
+          - --name
+          - "{{ item.name }}"
+      loop:
+        - {kind: vmss, name: tp2vmss}
+        - {kind: vm, name: jumpbox}
+      loop_control:
+        label: "{{ item.name }}: {{ tp2_power }}"
+      when: tp2_power in ['pause', 'resume']
+
+    - name: Consultar y verificar el estado de todas las instancias del VMSS
+      ansible.builtin.command:
+        argv:
+          - az
+          - vmss
+          - list-instances
+          - --subscription
+          - "{{ tp2_subscription }}"
+          - --resource-group
+          - "{{ tp2_resource_group }}"
+          - --name
+          - tp2vmss
+          - --expand
+          - instanceView
+          - --query
+          - "[].{instancia:instanceId,estado:instanceView.statuses[?starts_with(code, 'PowerState/')].code | [0]}"
+          - --output
+          - json
+      register: tp2_vmss_status
+      changed_when: false
+      # Una lista vacia o un estado desconocido no confirman una pausa/arranque.
+      until:
+        - tp2_vmss_status.rc == 0
+        - >-
+          tp2_power == 'status' or
+          (tp2_vmss_status.stdout | from_json | map(attribute='estado') | unique | list)
+          == [tp2_expected_power_state]
+      retries: 24
+      delay: 5
+
+    - name: Consultar y verificar el estado de la jumpbox
+      ansible.builtin.command:
+        argv:
+          - az
+          - vm
+          - get-instance-view
+          - --subscription
+          - "{{ tp2_subscription }}"
+          - --resource-group
+          - "{{ tp2_resource_group }}"
+          - --name
+          - jumpbox
+          - --query
+          - "instanceView.statuses[?starts_with(code, 'PowerState/')].code | [0]"
+          - --output
+          - tsv
+      register: tp2_jumpbox_status
+      changed_when: false
+      until:
+        - tp2_jumpbox_status.rc == 0
+        - tp2_power == 'status' or (tp2_jumpbox_status.stdout | trim) == tp2_expected_power_state
+      retries: 24
+      delay: 5
+
+    - name: Mostrar los estados informados por Azure
+      ansible.builtin.debug:
+        msg:
+          vmss: "{{ tp2_vmss_status.stdout | from_json }}"
+          jumpbox: "{{ (tp2_jumpbox_status.stdout | trim) | default('Estado no informado', true) }}"
+
+    - name: Consultar las IP actuales de los nodos al reanudar
+      ansible.builtin.command:
+        argv:
+          - az
+          - vmss
+          - nic
+          - list
+          - --subscription
+          - "{{ tp2_subscription }}"
+          - --resource-group
+          - "{{ tp2_resource_group }}"
+          - --vmss-name
+          - tp2vmss
+          - --query
+          - "[].ipConfigurations[].privateIPAddress"
+          - --output
+          - json
+      register: tp2_node_ips
+      changed_when: false
+      when: tp2_power == 'resume'
+
+    - name: Comprobar que hay nodos para reanudar la API
+      ansible.builtin.assert:
+        that:
+          - (tp2_node_ips.stdout | from_json | length) > 0
+        fail_msg: "El VMSS no tiene nodos. Revisa su estado en Azure."
+      when: tp2_power == 'resume'
+
+    - name: Actualizar el inventario persistente para los proximos despliegues
+      ansible.builtin.copy:
+        dest: "{{ playbook_dir }}/vmss_hosts"
+        mode: "0600"
+        content: |
+          [vmss]
+          {% for ip in tp2_node_ips.stdout | from_json %}
+          {{ ip }}
+          {% endfor %}
+          [vmss:vars]
+          ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ../key.pem -W %h:%p -q azureuser@{{ lookup('ansible.builtin.file', playbook_dir ~ '/jumpbox_dns') | trim }}"'
+      when: tp2_power == 'resume'
+
+    - name: Cargar las IP actualizadas en el inventario de Ansible
+      ansible.builtin.meta: refresh_inventory
+
+- name: Reanudar la aplicacion instalada en los nodos
+  hosts: "{{ 'vmss' if tp2_power == 'resume' else 'localhost' }}"
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    ansible_user: azureuser
+    ansible_ssh_private_key_file: "{{ playbook_dir }}/../key.pem"
+    # Se usan rutas absolutas porque este playbook se ejecuta desde la raiz.
+    ansible_ssh_common_args: >-
+      -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+      -o ProxyCommand="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+      -i {{ playbook_dir }}/../key.pem -W %h:%p -q
+      azureuser@{{ lookup('ansible.builtin.file', playbook_dir ~ '/jumpbox_dns') | trim }}"
+  tasks:
+    - name: Esperar SSH y arrancar la API al reanudar
+      when: tp2_power == 'resume'
+      block:
+        - name: Esperar a que el nodo y la jumpbox esten disponibles
+          ansible.builtin.wait_for_connection:
+            timeout: 300
+            sleep: 5
+
+        - name: Reiniciar la API o iniciarla si PM2 aun no tiene el proceso
+          ansible.builtin.shell: pm2 restart app || pm2 start app.js --name app
+          args:
+            chdir: /home/azureuser
+
+- name: Comprobar el resultado
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Esperar la respuesta de la API a traves del balanceador
+      ansible.builtin.uri:
+        url: "http://{{ lookup('ansible.builtin.file', playbook_dir ~ '/../node/lb_dns') | trim }}/"
+        status_code: 200
+        timeout: 5
+      register: tp2_api_response
+      until: (tp2_api_response.status | default(0)) == 200
+      retries: 24
+      delay: 5
+      when: tp2_power == 'resume'
+
+    - name: Informar el estado final
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'Pausa verificada: todas las VM del VMSS y la jumpbox estan en PowerState/deallocated. Los demas recursos siguen generando cargos.'
+             if tp2_power == 'pause'
+             else ('Arranque verificado: VMSS y jumpbox en PowerState/running; API respondiendo HTTP 200.'
+                   if tp2_power == 'resume'
+                   else 'Consulta finalizada. Se muestran los estados actuales sin pausar ni arrancar recursos.') }}

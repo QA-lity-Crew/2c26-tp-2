@@ -1,9 +1,21 @@
 - name: Update app
   hosts: all
   gather_facts: yes
+  vars:
+    arca_protection: "off"
+    arca_max_retries: "{{ 2 if arca_protection == 'on' else 0 }}"
+    arca_max_concurrent: "{{ 150 if arca_protection == 'on' else 0 }}"
+  pre_tasks:
+    - name: Validate retry configuration
+      assert:
+        that:
+          - (arca_max_retries | string) in ['0', '1', '2']
+          - arca_protection in ['off', 'on']
+          - (arca_max_concurrent | int) >= 0 and (arca_max_concurrent | int) <= 1000
+        fail_msg: Revisar arca_protection, arca_max_retries y arca_max_concurrent
   tasks:
-    - name: Stop old version
-      command: pm2 stop app.js
+    - name: Remove old PM2 app definition to refresh its environment
+      command: pm2 delete app.js
       ignore_errors: yes
     - name: Extract new version
       unarchive:
@@ -11,7 +23,11 @@
         dest: ~/.
         owner: azureuser
         group: azureuser
-    - name: Install dependencies
-      command: npm install
+    - name: Install locked dependencies
+      command: npm ci
     - name: Start new version
-      command: pm2 start app.js
+      command: pm2 start app.js --name app
+      environment:
+        ARCA_MAX_RETRIES: "{{ arca_max_retries | string }}"
+        ARCA_PROTECTION: "{{ arca_protection }}"
+        ARCA_MAX_CONCURRENT: "{{ arca_max_concurrent | string }}"
