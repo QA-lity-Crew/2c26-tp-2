@@ -2,7 +2,9 @@ import { nanoid } from "nanoid";
 import * as state from "./state.js";
 import axios from 'axios';
 import config from './config.js';
-import { emitExchangeMetrics, emitArcaMetrics } from "./metrics.js";
+import { emitExchangeMetrics, emitArcaMetrics, emitArcaRetryMetrics, emitArcaOperationMetrics,
+  emitArcaProtectionMetrics, emitArcaCircuitTransition } from "./metrics.js";
+import { createArcaValidator, readArcaPolicy } from "./arca-retry.js";
 
 export const init = state.init;
 export const getAccounts = state.getAccounts;
@@ -14,72 +16,26 @@ export const EXCHANGE_ERROR_CODES = Object.freeze({
   RATE_CHANGED: "RATE_CHANGED",
   ARCA_ERROR: "ARCA_ERROR",
   ARCA_UNAUTHORIZED: "ARCA_UNAUTHORIZED",
+  ARCA_CIRCUIT_OPEN: "ARCA_CIRCUIT_OPEN",
+  ARCA_CONCURRENCY_LIMIT: "ARCA_CONCURRENCY_LIMIT",
   INSUFFICIENT_FUNDS: "INSUFFICIENT_FUNDS",
 });
 
-// Timeout estricto para proteger la API ante degradación de ARCA (2000 ms)
-const ARCA_TIMEOUT_MS = 2000;
+const arcaPolicy = readArcaPolicy();
+console.info("[ARCA policy]", JSON.stringify(arcaPolicy));
+export const validateWithArca = createArcaValidator({
+  post: (...args) => axios.post(...args),
+  arcaUri: config.arcaUri,
+  policy: arcaPolicy,
+  emitAttempt: emitArcaMetrics,
+  emitRetry: emitArcaRetryMetrics,
+  emitOperation: emitArcaOperationMetrics,
+  emitProtection: emitArcaProtectionMetrics,
+  emitTransition: emitArcaCircuitTransition,
+});
 
 export async function setRate({ baseCurrency, counterCurrency, rate }) {
   await state.setRate(baseCurrency, counterCurrency, rate);
-}
-
-/**
- * Valida un DNI contra el servicio externo ARCA.
- * Maneja timeouts, respuestas no-200 y emite telemetría StatsD.
- */
-async function validateWithArca(dni) {
-  const startTime = Date.now();
-  let durationMs = 0;
-
-  try {
-    const response = await axios.post(
-      `${config.arcaUri}/validar`,
-      { dni: String(dni) },
-      { timeout: ARCA_TIMEOUT_MS }
-    );
-    durationMs = Date.now() - startTime;
-
-    if (response.status === 200 && response.data) {
-      // Soporta booleano nativo o string "true"
-      const isApproved = response.data.ok === true || response.data.ok === "true";
-      const authCode = response.data.codigoAutorizacion || null;
-
-      emitArcaMetrics({
-        durationMs,
-        status: isApproved ? "approved" : "rejected",
-      });
-
-      return {
-        ok: true,
-        approved: isApproved,
-        authCode,
-        obs: isApproved ? null : "ARCA did not authorize the transaction (fiscal restrictions)",
-      };
-    }
-
-    emitArcaMetrics({ durationMs, status: "error" });
-    return {
-      ok: false,
-      approved: false,
-      authCode: null,
-      obs: `Unexpected status ${response.status} from ARCA`,
-    };
-  } catch (error) {
-    durationMs = Date.now() - startTime;
-    const isTimeout = error.code === "ECONNABORTED" || error.message?.includes("timeout");
-    const statusTag = isTimeout ? "timeout" : "error";
-
-    emitArcaMetrics({ durationMs, status: statusTag });
-
-    console.error(`[ARCA] Error validating DNI ${dni} (${statusTag}):`, error.message);
-    return {
-      ok: false,
-      approved: false,
-      authCode: null,
-      obs: isTimeout ? "ARCA validation timed out" : "Exception communicating with ARCA service",
-    };
-  }
 }
 
 export async function exchange(exchangeRequest) {
@@ -113,6 +69,26 @@ export async function exchange(exchangeRequest) {
 
   // 1. Validación de cumplimiento fiscal ante ARCA
   const arcaResult = await validateWithArca(dni);
+  // Tambien queda en el log existente, con metadatos de cada intento sin duplicar fondos.
+  exchangeResult.arcaPolicy = arcaResult.policy;
+  exchangeResult.arcaAttempts = arcaResult.attempts;
+  exchangeResult.arcaRecovered = arcaResult.recovered;
+  exchangeResult.arcaAttemptResults = arcaResult.attemptResults;
+  exchangeResult.arcaFirstAttemptRetryable = arcaResult.firstAttemptRetryable;
+  exchangeResult.arcaStopReason = arcaResult.stopReason;
+  exchangeResult.arcaDurationMs = arcaResult.durationMs;
+  exchangeResult.arcaBackoffMs = arcaResult.backoffMs;
+  exchangeResult.arcaHttpTimeMs = arcaResult.httpTimeMs;
+  exchangeResult.arcaCircuitState = arcaResult.circuitState;
+
+  if (['circuit_open', 'concurrency_rejected'].includes(arcaResult.status)) {
+    exchangeResult.error = arcaResult.status === 'circuit_open'
+      ? EXCHANGE_ERROR_CODES.ARCA_CIRCUIT_OPEN : EXCHANGE_ERROR_CODES.ARCA_CONCURRENCY_LIMIT;
+    exchangeResult.obs = arcaResult.obs;
+    exchangeResult.retryAfterSeconds = arcaResult.retryAfterSeconds;
+    await state.appendLog(exchangeResult);
+    return exchangeResult;
+  }
 
   if (!arcaResult.ok) {
     // Falla de red, timeout o error interno de ARCA (500)

@@ -1,6 +1,4 @@
 import express from 'express';
-import axios from 'axios';
-import config from './config.js';
 
 import {
   init as exchangeInit,
@@ -11,6 +9,7 @@ import {
   getLog,
   exchange,
   EXCHANGE_ERROR_CODES,
+  validateWithArca,
 } from "./exchange.js";
 
 await exchangeInit();
@@ -89,6 +88,10 @@ app.post("/exchange", async (req, res) => {
 
   if (exchangeResult.ok) {
     res.status(200).json(exchangeResult);
+  } else if ([EXCHANGE_ERROR_CODES.ARCA_CIRCUIT_OPEN,
+    EXCHANGE_ERROR_CODES.ARCA_CONCURRENCY_LIMIT].includes(exchangeResult.error)) {
+    res.set('Retry-After', String(exchangeResult.retryAfterSeconds || 1));
+    res.status(503).json(exchangeResult);
   } else if (exchangeResult.error === EXCHANGE_ERROR_CODES.RATE_CHANGED) {
     res.status(409).json(exchangeResult);
   } else if (exchangeResult.error === EXCHANGE_ERROR_CODES.ARCA_UNAUTHORIZED) {
@@ -107,17 +110,16 @@ app.post("/exchange", async (req, res) => {
 // ARCA diagnostic endpoint
 
 app.get('/arca/:dni', async (req, res) => {
-    try {
-        const response = await axios.post(
-          `${config.arcaUri}/validar`,
-          { dni: String(req.params.dni) },
-          { timeout: 2000 }
-        );
-        res.status(response.status).json(response.data);
-    } catch (e) {
-        console.error("Exception consuming ARCA service directly:", e.message);
-        res.status(502).json({ error: "ARCA service unavailable", message: e.message });
+    // Comparte exactamente el mismo CB y cupos que POST /exchange.
+    const result = await validateWithArca(String(req.params.dni));
+    if (['circuit_open', 'concurrency_rejected'].includes(result.status)) {
+      res.set('Retry-After', String(result.retryAfterSeconds || 1));
+      return res.status(503).json({ error: result.status === 'circuit_open'
+        ? EXCHANGE_ERROR_CODES.ARCA_CIRCUIT_OPEN : EXCHANGE_ERROR_CODES.ARCA_CONCURRENCY_LIMIT });
     }
+    if (!result.ok) return res.status(502).json({ error: EXCHANGE_ERROR_CODES.ARCA_ERROR });
+    return res.status(200).json({ ok: result.approved,
+      ...(result.authCode ? { codigoAutorizacion: result.authCode } : {}) });
 });
 
 app.listen(port, () => {
@@ -125,3 +127,4 @@ app.listen(port, () => {
 });
 
 export default app;
+
