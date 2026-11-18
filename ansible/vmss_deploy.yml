@@ -2,7 +2,7 @@
   hosts: all
   gather_facts: yes
   vars:
-    arca_protection: "off"
+    arca_protection: "on"
     arca_max_retries: "{{ 2 if arca_protection == 'on' else 0 }}"
     arca_max_concurrent: "{{ 150 if arca_protection == 'on' else 0 }}"
   pre_tasks:
