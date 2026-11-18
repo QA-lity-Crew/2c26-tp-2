@@ -122,7 +122,20 @@ export async function setRate(base, counter, rate) {
 }
 
 // LOG
-export const appendLog = (entry) => redis.rpush("{app}:log", JSON.stringify(entry));
+// Cantidad máxima de entradas del log que se conservan en Redis.
+// Sin este tope la lista crece sin límite y, con la política noeviction de Azure Managed Redis,
+// termina rechazando escrituras (OOM) y todos los exchanges fallan.
+const LOG_MAX_ENTRIES = Number(process.env.LOG_MAX_ENTRIES) || 50000;
+
+// RPUSH + LTRIM en una misma transacción: se agrega la entrada y se descartan las más viejas,
+// de modo que la lista nunca supera LOG_MAX_ENTRIES.
+export async function appendLog(entry) {
+  await redis
+    .multi()
+    .rpush("{app}:log", JSON.stringify(entry))
+    .ltrim("{app}:log", -LOG_MAX_ENTRIES, -1)
+    .exec();
+}
 
 export async function getLog() {
   return (await redis.lrange("{app}:log", 0, -1)).map((l) => JSON.parse(l));
