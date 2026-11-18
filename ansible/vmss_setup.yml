@@ -3,7 +3,7 @@
   gather_facts: yes
   vars:
     datadog_api_key: "{{ lookup('file', './ddog_api_key') }}"
-    datadog_site: "datadoghq.com"
+    datadog_site: "us5.datadoghq.com"
 
   tasks:
     - name: Import Datadog Agent role from collection

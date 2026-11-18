@@ -25,3 +25,9 @@ pubkey
 *.pem
 *.bak
 .vscode
+.terraform.lock.hcl
+node/config.js
+node/redis.json
+redis.tfZone.Identifier
+node/src.zip
+*.bak
