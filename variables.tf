@@ -43,5 +43,5 @@ variable "os_version" {
 }
 
 variable "machine_sku" {
-  default = "Standard_B2ats_v2"
+  default = "Standard_F1als_v7"
 }

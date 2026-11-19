@@ -1,0 +1,4 @@
+InstanceId    LatestModelApplied    Location    ModelDefinitionApplied    Name       ProvisioningState    ResilientVMDeletionStatus    ResourceGroup       TimeCreated                        VmId
+------------  --------------------  ----------  ------------------------  ---------  -------------------  ---------------------------  ------------------  ---------------------------------  ------------------------------------
+0             True                  westus2     VirtualMachineScaleSet    tp2vmss_0  Succeeded            Disabled                     tp2_resource_group  2026-11-16T04:18:00.7869072+00:00  76d14010-b9db-4a6c-a07b-4e2256d628af
+1             True                  westus2     VirtualMachineScaleSet    tp2vmss_1  Succeeded            Disabled                     tp2_resource_group  2026-11-16T05:53:29.1888298+00:00  1d64ec5a-beb2-44fd-bd03-c47bc7b08830
