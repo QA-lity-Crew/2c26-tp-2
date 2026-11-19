@@ -1,0 +1,4 @@
+CPU de ARCA (Azure Container Instances), tactica 2, 2 nodos, exchange-saturation-3000
+Corrida: 2026-11-19 02:39 a 02:46 UTC (23:39 a 23:46 hora de Argentina). Limite del contenedor: 0.5 vCPU = 500 millicores.
+
+Comando: az monitor metrics list --resource <container group de ARCA> --metric CPUUsage --interval PT1M --aggregation Average Maximum
