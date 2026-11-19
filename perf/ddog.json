@@ -1,0 +1,1021 @@
+{
+  "layout_type": "ordered",
+  "reflow_type": "fixed",
+  "notify_list": [],
+  "title": "TP2 Tactica 2 Retry CB y concurrencia ARCA",
+  "description": "Control y tratamiento con la misma instrumentacion. Artefacto para importacion manual; no validado contra una cuenta Datadog.",
+  "template_variables": [
+    {
+      "name": "host",
+      "prefix": "host",
+      "defaults": [
+        "tp2vmss*"
+      ]
+    },
+    {
+      "name": "policy",
+      "prefix": "policy",
+      "defaults": [
+        "*"
+      ]
+    },
+    {
+      "name": "nodes",
+      "prefix": "nodes",
+      "defaults": [
+        "*"
+      ]
+    }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "type": "note",
+        "content": "**Control:** policy:no_retry (protecciones desactivadas). **Tratamiento:** policy:protected (retry + CB + cupos). Seleccionar la ventana exacta de cada corrida y no ejecutar otras cargas sobre el mismo entorno. Los tags de aplicacion se incorporan con esta implementacion. **No Data no significa cero.** La retencion del log de Redis permanece en 50.000 entradas.",
+        "font_size": "14",
+        "text_align": "left",
+        "background_color": "white",
+        "has_padding": true
+      },
+      "layout": {
+        "x": 0,
+        "y": 0,
+        "width": 12,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "ARCA operaciones finales/s por estado",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "finales",
+                "data_source": "metrics",
+                "query": "sum:arca.operation.count{$host,$policy} by {status,policy}.as_rate()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "finales"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 3,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "ARCA intentos/s por estado",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "Incluye todos los intentos, no solamente el resultado final. No es throughput de exchanges.",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "intentos",
+                "data_source": "metrics",
+                "query": "sum:arca.validation.count{$host,$policy} by {status,policy}.as_rate()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "intentos"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 6,
+        "y": 3,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "ARCA errores por causa y politica/s",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "Distingue HTTP 500/502/503/504, otros HTTP, red y timeout. Las causas son etiquetas acotadas, sin DNI ni IDs de operacion.",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "causas",
+                "data_source": "metrics",
+                "query": "sum:arca.validation.count{!error_type:none,$host,$policy} by {error_type,policy}.as_rate()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "causas"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 6,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Indisponibilidad final remota y total (%)",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "No confundir menos 502 con mayor disponibilidad: tambien cuenta CB abierto y cupos agotados, que responden 503.",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "errores",
+                "data_source": "metrics",
+                "query": "sum:arca.operation.technical_error{$host,$policy} by {policy}.as_count()"
+              },
+              {
+                "name": "indisponibles",
+                "data_source": "metrics",
+                "query": "sum:arca.operation.unavailable{$host,$policy} by {policy}.as_count()"
+              },
+              {
+                "name": "total",
+                "data_source": "metrics",
+                "query": "sum:arca.operation.count{$host,$policy} by {policy}.as_count()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "100 * errores / total",
+                "alias": "Fallos remotos %"
+              },
+              {
+                "formula": "100 * indisponibles / total",
+                "alias": "Incluyendo rechazos locales %"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 6,
+        "y": 6,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Intentos por operacion ARCA",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "intentos",
+                "data_source": "metrics",
+                "query": "sum:arca.operation.attempts_total{$host,$policy} by {policy}.as_count()"
+              },
+              {
+                "name": "total",
+                "data_source": "metrics",
+                "query": "sum:arca.operation.count{$host,$policy} by {policy}.as_count()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "intentos / total",
+                "alias": "Intentos por operacion"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 9,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "ARCA recuperaciones/s por resultado final",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "Una validacion recuperada termina en aprobacion O rechazo fiscal. No equivale a un intercambio exitoso.",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "recuperadas",
+                "data_source": "metrics",
+                "query": "sum:arca.operation.recovered{$host,$policy} by {status,policy}.as_rate()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "recuperadas"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 6,
+        "y": 9,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Estado del circuito por instancia",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "-1 desactivado; 0 cerrado; 1 abierto; 2 semiabierto. Muestreo cada segundo: las transiciones breves tambien quedan en arca.circuit.transition y logs.",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "estado",
+                "data_source": "metrics",
+                "query": "max:arca.circuit.state{$host,$policy} by {host,policy}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "estado"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "-1",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 12,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Motivo de finalizacion de validaciones/s",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "completed incluye aprobacion o rechazo fiscal. attempt_limit agota intentos; time_budget impide continuar por falta de margen; disabled es el control.",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "motivos",
+                "data_source": "metrics",
+                "query": "sum:arca.operation.count{$host,$policy} by {stop_reason,policy}.as_rate()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "motivos"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 6,
+        "y": 12,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Validacion completa mediana y p95 local (ms)",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "Incluye backoff y todos los intentos. Percentiles por host/ventana del agente, no p95 global de la corrida.",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "mediana",
+                "data_source": "metrics",
+                "query": "avg:arca.operation.latency.median{$host,$policy} by {host,policy}"
+              },
+              {
+                "name": "p95",
+                "data_source": "metrics",
+                "query": "max:arca.operation.latency.95percentile{$host,$policy} by {host,policy}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "mediana"
+              },
+              {
+                "formula": "p95"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 15,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Tiempo HTTP acumulado y backoff medios por operacion (ms)",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "Medias locales por host. HTTP incluye espera de red y servidor de todos los intentos, no tiempo de CPU. Backoff incluye solo esperas entre intentos.",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "http",
+                "data_source": "metrics",
+                "query": "avg:arca.operation.http_time.avg{$host,$policy} by {host,policy}"
+              },
+              {
+                "name": "espera",
+                "data_source": "metrics",
+                "query": "avg:arca.operation.backoff.avg{$host,$policy} by {host,policy}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "http"
+              },
+              {
+                "formula": "espera"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 6,
+        "y": 15,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Intercambios exitosos/s al primer intento o tras retry",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "Cuenta negocio realmente completado; una aprobacion de ARCA sin fondos no suma un intercambio exitoso.",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "exitos",
+                "data_source": "metrics",
+                "query": "sum:business.exchange.success{$host,$policy} by {policy,recovery}.as_rate()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "exitos"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 18,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Artillery respuestas por codigo/s",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "422 es rechazo fiscal; 502 fallo remoto; 503 rechazo local. El reporte JSON es la fuente de totales.",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "http200",
+                "data_source": "metrics",
+                "query": "sum:artillery.http.codes.200{test:arca-retry,$policy,$nodes} by {policy}.as_rate()"
+              },
+              {
+                "name": "http422",
+                "data_source": "metrics",
+                "query": "sum:artillery.http.codes.422{test:arca-retry,$policy,$nodes} by {policy}.as_rate()"
+              },
+              {
+                "name": "http500",
+                "data_source": "metrics",
+                "query": "sum:artillery.http.codes.500{test:arca-retry,$policy,$nodes} by {policy}.as_rate()"
+              },
+              {
+                "name": "http502",
+                "data_source": "metrics",
+                "query": "sum:artillery.http.codes.502{test:arca-retry,$policy,$nodes} by {policy}.as_rate()"
+              },
+              {
+                "name": "http503",
+                "data_source": "metrics",
+                "query": "sum:artillery.http.codes.503{test:arca-retry,$policy,$nodes} by {policy}.as_rate()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "http200"
+              },
+              {
+                "formula": "http422"
+              },
+              {
+                "formula": "http500"
+              },
+              {
+                "formula": "http502"
+              },
+              {
+                "formula": "http503"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 6,
+        "y": 18,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Artillery HTTP 200 mediana y p95 por ventana",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "Metricas de resumen por ventana. Usar aggregate.summaries del JSON para percentiles de la corrida completa.",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "mediana",
+                "data_source": "metrics",
+                "query": "avg:artillery.http.response_time.2xx.median{test:arca-retry,$policy,$nodes} by {policy}"
+              },
+              {
+                "name": "p95",
+                "data_source": "metrics",
+                "query": "max:artillery.http.response_time.2xx.p95{test:arca-retry,$policy,$nodes} by {policy}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "mediana"
+              },
+              {
+                "formula": "p95"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 21,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Artillery errores del generador/s",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "sin_ruta",
+                "data_source": "metrics",
+                "query": "sum:artillery.errors.EHOSTUNREACH{test:arca-retry,$policy,$nodes} by {policy}.as_rate()"
+              },
+              {
+                "name": "fallidos",
+                "data_source": "metrics",
+                "query": "sum:artillery.vusers.failed{test:arca-retry,$policy,$nodes} by {policy}.as_rate()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "sin_ruta"
+              },
+              {
+                "formula": "fallidos"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 6,
+        "y": 21,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Recuperacion entre primeros fallos elegibles (%)",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "Elegible significa primer HTTP 500/502/503/504, no recuperabilidad probada. Incluye recuperaciones con rechazo fiscal. Sin elegibles el porcentaje no esta definido.",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "recuperadas",
+                "data_source": "metrics",
+                "query": "sum:arca.operation.recovered{$host,$policy} by {policy}.as_count()"
+              },
+              {
+                "name": "elegibles",
+                "data_source": "metrics",
+                "query": "sum:arca.operation.retry_eligible{$host,$policy} by {policy}.as_count()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "100 * recuperadas / elegibles",
+                "alias": "Validaciones recuperadas / elegibles %"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 24,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "VM CPU usuario y sistema por nodo (%)",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "CPU de VM de aplicacion. No es CPU de ARCA; policy no filtra metricas system.",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "usuario",
+                "data_source": "metrics",
+                "query": "avg:system.cpu.user{$host} by {host}"
+              },
+              {
+                "name": "sistema",
+                "data_source": "metrics",
+                "query": "avg:system.cpu.system{$host} by {host}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "usuario"
+              },
+              {
+                "formula": "sistema"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 6,
+        "y": 24,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Validaciones activas y cupo por instancia",
+        "title_size": "16",
+        "title_align": "left",
+        "description": "Incluye backoff. Limite 0 significa sin cota nueva en el control. Un proceso por VM; no sumar para afirmar un limite global compartido.",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "max",
+          "value"
+        ],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "activas",
+                "data_source": "metrics",
+                "query": "max:arca.protection.inflight{$host,$policy} by {host,policy}"
+              },
+              {
+                "name": "limite",
+                "data_source": "metrics",
+                "query": "max:arca.protection.limit{$host,$policy} by {host,policy}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "activas"
+              },
+              {
+                "formula": "limite"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "min": "0",
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 27,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "note",
+        "content": ".",
+        "font_size": "14",
+        "text_align": "left",
+        "background_color": "white",
+        "has_padding": true
+      },
+      "layout": {
+        "x": 0,
+        "y": 30,
+        "width": 12,
+        "height": 3
+      }
+    }
+  ]
+}

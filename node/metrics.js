@@ -1,4 +1,6 @@
 import dgram from "dgram";
+import { readArcaPolicy } from "./arca-retry.js";
+const ACTIVE_POLICY = readArcaPolicy().policy;
 
 const STATSD_HOST = process.env.STATSD_HOST || "localhost";
 const STATSD_PORT = Number(process.env.STATSD_PORT) || 8125;
@@ -39,7 +41,8 @@ export function emitExchangeMetrics(exchangeResult) {
     `business.exchange.success:1|c`,
   ];
 
-  emitMetrics(metrics);
+  const recovery = exchangeResult.arcaRecovered ? 'after_retry' : 'first_attempt';
+  emitMetrics(metrics.map(line => `${line}|#policy:${ACTIVE_POLICY},recovery:${recovery}`));
 }
 
 /**
@@ -50,12 +53,56 @@ export function emitExchangeMetrics(exchangeResult) {
  * @param {number} arcaTelemetry.durationMs - Latency of the HTTP request to ARCA in ms
  * @param {string} arcaTelemetry.status - "approved" | "rejected" | "timeout" | "error"
  */
-export function emitArcaMetrics({ durationMs, status }) {
-  const metrics = [
-    `arca.validation.latency:${durationMs}|ms`,
-    `arca.validation.count:1|c|#status:${status}`,
-    `arca.validation.${status}:1|c`,
-  ];
-
-  emitMetrics(metrics);
+export function emitArcaMetrics({ durationMs, status, policy, attempt, errorType }) {
+  const tags = `policy:${policy},attempt:${attempt},error_type:${errorType}`;
+  emitMetrics([
+    `arca.validation.latency:${durationMs}|ms|#${tags}`,
+    `arca.validation.count:1|c|#status:${status},${tags}`,
+    `arca.validation.${status}:1|c|#${tags}`,
+  ]);
 }
+
+export function emitArcaRetryMetrics({ policy, attempt, delayMs }) {
+  emitMetrics([
+    `arca.retry.count:1|c|#policy:${policy},attempt:${attempt}`,
+    `arca.retry.delay:${delayMs}|ms|#policy:${policy},attempt:${attempt}`,
+  ]);
+}
+
+export function emitArcaOperationMetrics({ policy, status, durationMs, attempts, recovered,
+  firstAttemptRetryable, stopReason, backoffMs, httpTimeMs, queued = false, queueWaitMs = 0 }) {
+  const technicalError = status === 'error' || status === 'timeout';
+  const localRejection = status === 'circuit_open' || status === 'concurrency_rejected';
+  emitMetrics([
+    `arca.operation.count:1|c|#policy:${policy},status:${status},attempts:${attempts},stop_reason:${stopReason}`,
+    `arca.operation.latency:${durationMs}|ms|#policy:${policy}`,
+    `arca.operation.attempts_total:${attempts}|c|#policy:${policy}`,
+    `arca.operation.technical_error:${technicalError ? 1 : 0}|c|#policy:${policy}`,
+    `arca.operation.unavailable:${technicalError || localRejection ? 1 : 0}|c|#policy:${policy}`,
+    `arca.operation.recovered:${recovered ? 1 : 0}|c|#policy:${policy},status:${status}`,
+    `arca.operation.retry_eligible:${firstAttemptRetryable ? 1 : 0}|c|#policy:${policy}`,
+    `arca.operation.backoff:${backoffMs}|ms|#policy:${policy}`,
+    `arca.operation.http_time:${httpTimeMs}|ms|#policy:${policy}`,
+    `arca.queue.entered:${queued ? 1 : 0}|c|#policy:${policy}`,
+    ...(queued ? [`arca.queue.wait:${queueWaitMs}|ms|#policy:${policy},status:${status}`] : []),
+  ]);
+}
+
+export function emitArcaProtectionMetrics({ policy, state, active, limit, queued = 0,
+  queueLimit = 0, queueWaitLimitMs = 0 }) {
+  const stateCode = { disabled: -1, closed: 0, open: 1, half_open: 2 }[state];
+  emitMetrics([
+    `arca.protection.inflight:${active}|g|#policy:${policy}`,
+    `arca.protection.limit:${limit}|g|#policy:${policy}`,
+    `arca.protection.queued:${queued}|g|#policy:${policy}`,
+    `arca.protection.queue_limit:${queueLimit}|g|#policy:${policy}`,
+    `arca.protection.queue_wait_limit:${queueWaitLimitMs}|g|#policy:${policy}`,
+    `arca.circuit.state:${stateCode}|g|#policy:${policy}`,
+  ]);
+}
+
+export function emitArcaCircuitTransition({ policy, previous, state }) {
+  emitMetrics([`arca.circuit.transition:1|c|#policy:${policy},state:${state}`]);
+  console.info('[ARCA circuit]', JSON.stringify({ previous, state }));
+}
+
