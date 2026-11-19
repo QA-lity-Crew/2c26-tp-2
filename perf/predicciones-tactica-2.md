@@ -55,3 +55,54 @@ Con q=0,25 de fallo independiente por intento, tres intentos dan q^3=1,5625% de 
 
 El limite 150 se elige como punto inicial con margen, no como capacidad medida de ARCA. A 500 solicitudes/s y dos nodos, estimando unos 0,4 s de validacion media con retries y backoff, Little sugiere aproximadamente 100 validaciones concurrentes por nodo. Un limite de 150 deja margen para variacion y desequilibrio, pero impide crecimiento ilimitado durante demoras. El balanceador no garantiza reparto exacto y la duracion media puede cambiar: hay que medir admision y rechazos.
 
+
+## Predicción Táctica 2 BIS: concurrencia con espera y ajuste del cupo
+
+### Observaciones de la primera corrida
+
+La primera corrida de T2 mostró que el límite de 150 validaciones simultáneas por instancia se alcanzaba en ambos nodos. Al agotarse los cupos, la implementación rechazaba inmediatamente las solicitudes adicionales, sin dejarlas esperando.
+
+Se registraron 445.957 respuestas HTTP 503, equivalentes al 60,26% de las solicitudes. Los intercambios exitosos disminuyeron de 298.108 en la segunda corrida de T1 a 188.262 con T2. El Circuit Breaker permaneció cerrado según las capturas disponibles: los rechazos masivos se debieron al límite de concurrencia.
+
+La mediana global de 194,4 ms estuvo influida por esos rechazos rápidos. El p95 de los intercambios exitosos fue de 1.465,9 ms, por lo que la menor latencia global no representó una mejora equivalente para las operaciones completadas.
+
+Estos resultados motivan revisar tanto la política de admisión como la cantidad de cupos, conservando la evidencia y la predicción anteriores.
+
+### Ajustes hechos
+
+1. **Agregar espera:** cuando todos los cupos estén ocupados, las nuevas solicitudes esperarán en una cola FIFO local. Al liberarse un cupo, continuará la solicitud más antigua cuyo plazo siga vigente.
+2. **Acotar la acumulación:** cada instancia admitirá hasta 1.000 solicitudes pendientes, con un máximo nominal de 1.000 ms de espera. Si la cola está llena o vence ese plazo, responderá 503.
+3. **Aumentar la concurrencia a 200 validaciones por instancia:** con dos instancias y un proceso Node por instancia, serán hasta 400 validaciones activas entre ambas.
+4. **Conservar retries y Circuit Breaker:** cada validación seguirá ocupando su cupo durante los intentos y backoffs. Si abre el CB, también se rechazarán las solicitudes pendientes en la cola, sin enviarlas a ARCA.
+
+El presupuesto de validación de 2.500 ms comienza al obtener el cupo. Sumado a la espera, esta etapa podrá consumir hasta 3.500 ms nominales; ese tiempo no incluye las transferencias posteriores ni otras tareas de `/exchange`.
+
+### Fundamento del nuevo cupo
+
+En la primera corrida, ARCA mostraba alrededor de 288 millicores de los 500 asignados, aproximadamente un 58% de CPU, mientras ambas instancias alcanzaban su límite de concurrencia.
+
+Esto sugiere margen para ensayar un aumento moderado, aunque la CPU por sí sola no demuestra capacidad disponible. Pasar de 150 a 200 cupos representa un incremento del 33%. Si el consumo creciera proporcionalmente, ARCA podría aproximarse al 77% de CPU. Esta extrapolación es una hipótesis que deberá contrastarse con latencia y errores.
+
+El valor 200 se propone como siguiente punto de prueba, no como una capacidad sostenible ya medida de ARCA.
+
+### Predicciones antes de medir
+
+| Métrica | Predicción |
+|---|---|
+| Validaciones activas | No superarán 200 por instancia; esperamos alcanzar el cupo durante la carga alta. |
+| Cola | Esperamos observar solicitudes pendientes durante la rampa alta y la meseta, sin superar 1.000 por instancia. |
+| Rechazos | Mientras haya lugar en la cola, encontrar los 200 cupos ocupados no provocará un rechazo inmediato. Bajo sobrecarga sostenida podrán aparecer 503 por cola llena o espera vencida. |
+| Latencia | Esperamos que la mediana global aumente respecto de 194,4 ms si predominan las solicitudes que esperan. Con cola sostenida, estimamos un p95 de HTTP 200 de entre 2.000 y 3.000 ms en la meseta. |
+| Intercambios exitosos | En un entorno comparable, esperamos superar los 188.262 HTTP 200 de la primera corrida de T2 por el aumento del cupo, siempre que ARCA sostenga la carga adicional. No se garantiza recuperar los aproximadamente 298.000 de T1. |
+| Recursos | ARCA podría consumir más CPU al recibir más tráfico. La memoria de nuestra app también podría aumentar por las solicitudes pendientes. Esperamos ausencia de OOM y de HTTP 500, a verificar con métricas y logs. |
+| Circuit Breaker | Esperamos que permanezca cerrado si los fallos finales siguen siendo bajos. Si no abre, esta corrida tampoco validará su recuperación ante una caída persistente. |
+
+### Escenario y evaluación
+
+Se reutilizará `exchange-saturation-3000.yaml`, con la misma carga programada que en las pruebas anteriores. Se registrarán el entorno real, los commits ejecutados y los horarios de medición.
+
+Se compararán intercambios exitosos, throughput, p95 de HTTP 200, causas de los 503, espera en cola, recuperaciones, estado del CB y recursos de la app y ARCA.
+
+Esta corrida modifica dos factores: agrega espera y aumenta el cupo de 150 a 200. Por ello no permitirá aislar el aporte individual de cada ajuste. Si además cambia el generador, la conexión o la infraestructura respecto de Franco, esas diferencias también limitarán la comparación.
+
+Una cola puede absorber ráfagas, pero no aumenta por sí misma la capacidad sostenida del servicio. Si predominan los vencimientos y no aumentan las operaciones completadas, el resultado indicará principalmente un traslado del costo desde el rechazo inmediato hacia la espera.

@@ -70,7 +70,7 @@ export function emitArcaRetryMetrics({ policy, attempt, delayMs }) {
 }
 
 export function emitArcaOperationMetrics({ policy, status, durationMs, attempts, recovered,
-  firstAttemptRetryable, stopReason, backoffMs, httpTimeMs }) {
+  firstAttemptRetryable, stopReason, backoffMs, httpTimeMs, queued = false, queueWaitMs = 0 }) {
   const technicalError = status === 'error' || status === 'timeout';
   const localRejection = status === 'circuit_open' || status === 'concurrency_rejected';
   emitMetrics([
@@ -83,14 +83,20 @@ export function emitArcaOperationMetrics({ policy, status, durationMs, attempts,
     `arca.operation.retry_eligible:${firstAttemptRetryable ? 1 : 0}|c|#policy:${policy}`,
     `arca.operation.backoff:${backoffMs}|ms|#policy:${policy}`,
     `arca.operation.http_time:${httpTimeMs}|ms|#policy:${policy}`,
+    `arca.queue.entered:${queued ? 1 : 0}|c|#policy:${policy}`,
+    ...(queued ? [`arca.queue.wait:${queueWaitMs}|ms|#policy:${policy},status:${status}`] : []),
   ]);
 }
 
-export function emitArcaProtectionMetrics({ policy, state, active, limit }) {
+export function emitArcaProtectionMetrics({ policy, state, active, limit, queued = 0,
+  queueLimit = 0, queueWaitLimitMs = 0 }) {
   const stateCode = { disabled: -1, closed: 0, open: 1, half_open: 2 }[state];
   emitMetrics([
     `arca.protection.inflight:${active}|g|#policy:${policy}`,
     `arca.protection.limit:${limit}|g|#policy:${policy}`,
+    `arca.protection.queued:${queued}|g|#policy:${policy}`,
+    `arca.protection.queue_limit:${queueLimit}|g|#policy:${policy}`,
+    `arca.protection.queue_wait_limit:${queueWaitLimitMs}|g|#policy:${policy}`,
     `arca.circuit.state:${stateCode}|g|#policy:${policy}`,
   ]);
 }

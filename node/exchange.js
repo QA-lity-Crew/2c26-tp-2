@@ -77,6 +77,8 @@ export async function exchange(exchangeRequest) {
   exchangeResult.arcaFirstAttemptRetryable = arcaResult.firstAttemptRetryable;
   exchangeResult.arcaStopReason = arcaResult.stopReason;
   exchangeResult.arcaDurationMs = arcaResult.durationMs;
+  exchangeResult.arcaQueued = arcaResult.queued;
+  exchangeResult.arcaQueueWaitMs = arcaResult.queueWaitMs;
   exchangeResult.arcaBackoffMs = arcaResult.backoffMs;
   exchangeResult.arcaHttpTimeMs = arcaResult.httpTimeMs;
   exchangeResult.arcaCircuitState = arcaResult.circuitState;

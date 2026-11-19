@@ -23,6 +23,9 @@ export function readArcaPolicy(env = process.env) {
     policy: circuitEnabled || Number(concurrency) > 0 ? 'protected' : maxRetries === 0 ? 'no_retry' : 'retry',
     circuitEnabled,
     maxConcurrent: Number(concurrency),
+    // Espera FIFO local antes de adquirir cupo. No requiere cambiar el deploy.
+    maxQueued: Number(concurrency) > 0 ? 1000 : 0,
+    maxQueueWaitMs: 1000,
     circuitOpenMs: 5000,
     circuitMinSamples: 20,
     circuitFailureRatio: 0.8,
@@ -190,12 +193,14 @@ export function createArcaValidator({
 
   return async function validateWithArca(dni) {
     const started = now();
-    const admission = protection.enter();
+    const admission = await protection.acquire();
     let result;
     if (!admission.allowed) {
       const circuit = admission.reason === 'circuit_open';
       result = { ok: false, approved: false, authCode: null,
-        obs: circuit ? 'ARCA circuit is temporarily open' : 'ARCA validation concurrency limit reached',
+        obs: circuit ? 'ARCA circuit is temporarily open'
+          : admission.reason === 'queue_timeout' ? 'ARCA validation queue wait timed out'
+          : 'ARCA validation queue is full',
         status: circuit ? 'circuit_open' : 'concurrency_rejected',
         policy: policy.policy, attempts: 0, attemptResults: [], recovered: false,
         firstAttemptRetryable: false, stopReason: admission.reason,
@@ -208,12 +213,17 @@ export function createArcaValidator({
         protection.leave(admission.permit, healthOf(result));
       }
     }
+    result.queued = admission.queued;
+    result.queueWaitMs = admission.queueWaitMs;
+    // La operacion incluye espera en cola + validacion. La validacion conserva
+    // su presupuesto propio de 2500 ms: como maximo nominal, 1000 + 2500 ms.
+    result.durationMs = Math.max(0, now() - started);
     result.circuitState = protection.snapshot().state;
     // La telemetria no recibe DNI, autorizaciones ni el cuerpo completo del resultado.
     const { status, durationMs, attempts, recovered, firstAttemptRetryable,
-      stopReason, backoffMs, httpTimeMs } = result;
+      stopReason, backoffMs, httpTimeMs, queued, queueWaitMs } = result;
     emitOperation({ policy: policy.policy, status, durationMs, attempts, recovered,
-      firstAttemptRetryable, stopReason, backoffMs, httpTimeMs });
+      firstAttemptRetryable, stopReason, backoffMs, httpTimeMs, queued, queueWaitMs });
     return result;
   };
 }
