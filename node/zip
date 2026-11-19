@@ -2,6 +2,6 @@ OLD_DIR="$(pwd)"
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd $DIR
 
-zip src.zip *.js *.json -1
+zip src.zip *.js *.json state/*.json -1
 
 cd $OLD_DIR

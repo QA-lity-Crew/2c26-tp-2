@@ -1,0 +1,22 @@
+CPU de ARCA (Azure Container Instances), caso de 2 nodos, escenario exchange-saturation-3000
+Corrida: 2026-11-16 06:31:44Z a 06:39:06Z (03:31 a 03:39 hora de Argentina). Límite del contenedor: 0.5 vCPU = 500 millicores.
+
+Comando:
+az monitor metrics list --resource <id del container group de ARCA> --metric CPUUsage \
+  --start-time 2026-11-16T06:29:00Z --end-time 2026-11-16T06:42:00Z --interval PT1M --aggregation Average Maximum
+
+Métrica CpuUsage (millicores), por minuto (hora UTC):
+hora   promedio  máximo
+06:29     0.0      0.0
+06:30     0.0      0.0
+06:31     0.0      0.0
+06:32     0.0      0.0
+06:33    45.5     62.0
+06:34   120.5    141.0
+06:35   226.5    255.0
+06:36   335.0    365.0
+06:37   372.5    373.0
+06:38   394.5    403.0
+06:39   386.5    398.0
+06:40   216.0    399.0
+06:41     0.0      0.0

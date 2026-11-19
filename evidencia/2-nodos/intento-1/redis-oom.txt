@@ -1,0 +1,22 @@
+Intento 1 del caso de 2 nodos (2026-11-16, 03:07 a 03:15 hora de Argentina): falla de Redis por falta de memoria.
+Datos tomados después de la corrida, antes de vaciar la lista "{app}:log".
+
+1) Respuestas 500 en el reporte de Artillery (perf/results/2-nodos-saturation-3000-intento-1.json):
+   http.codes.500 = 96554
+
+2) Errores de Redis en el log de la aplicación de cada VM (~/.pm2/logs/app-error.log):
+   comando: grep -c "OOM command not allowed" ~/.pm2/logs/app-error.log
+   VM tp2vmss000000 (10.0.2.4): 48049
+   VM tp2vmss000001 (10.0.2.5): 48505
+   Suma: 96554 (coincide con las respuestas 500 del punto 1)
+   Texto del error: SimpleError [ReplyError]: OOM command not allowed when used memory > 'maxmemory'.
+
+3) Estado de Redis (consulta de solo lectura con ioredis desde una VM del VMSS):
+   LLEN "{app}:log"   = 1078289
+   used_memory        = 859001312 bytes (819,20 MB)
+   maxmemory_policy   = noeviction
+   SKU (redis.tf)     = Balanced_B0, eviction_policy = "NoEviction"
+
+4) Origen del crecimiento: node/state.js, función appendLog: RPUSH "{app}:log" por cada intercambio, sin límite de largo.
+
+5) Acción posterior: se borró solo la lista "{app}:log" (UNLINK); saldos y cotizaciones no se tocaron. La corrida limpia no tuvo respuestas 500.

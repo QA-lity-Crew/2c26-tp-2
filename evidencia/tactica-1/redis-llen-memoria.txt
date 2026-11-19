@@ -1,0 +1,18 @@
+== antes de desplegar la tactica 1 (2026-11-18T03:30:52Z)
+LLEN log: 452500
+used_memory:368499616
+used_memory_human:351.42M
+maxmemory_policy:noeviction
+
+== despues de la corrida 1 (2026-11-18T03:46:04Z)
+LLEN log: 50000
+used_memory:53415104
+used_memory_human:50.94M
+maxmemory_policy:noeviction
+
+== despues de la corrida 2 (2026-11-18T03:56:09Z)
+LLEN log: 50000
+used_memory:53430592
+used_memory_human:50.95M
+maxmemory_policy:noeviction
+

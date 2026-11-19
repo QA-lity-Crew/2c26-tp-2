@@ -1,0 +1,19 @@
+Cuota y disponibilidad de VM en westus2 (suscripcion original). Consultado el 2026-11-16T07:02:49Z
+
+--- az vm list-usage -l westus2 (familias relevantes y total regional) ---
+Familia               Uso    Limite
+--------------------  -----  --------
+StandardFalsv7Family  3      10
+cores                 3      10
+standardBSFamily      0      10
+standardBasv2Family   0      0
+
+--- az vm list-skus -l westus2 --size Standard_B2ats_v2 ---
+Tamano             Familia              Restriccion
+-----------------  -------------------  ---------------------------
+Standard_B2ats_v2  standardBasv2Family  NotAvailableForSubscription
+
+--- az vm list-skus -l westus2 --size Standard_F1als_v7 ---
+Tamano             Familia
+-----------------  --------------------
+Standard_F1als_v7  StandardFalsv7Family

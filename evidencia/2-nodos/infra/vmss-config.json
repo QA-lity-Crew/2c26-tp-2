@@ -1,0 +1,119 @@
+{
+  "doNotRunExtensionsOnOverprovisionedVMs": false,
+  "etag": "\"2\"",
+  "id": "/subscriptions/3774fcec-6875-4c33-b945-f38f65242815/resourceGroups/tp2_resource_group/providers/Microsoft.Compute/virtualMachineScaleSets/tp2vmss",
+  "location": "westus2",
+  "name": "tp2vmss",
+  "orchestrationMode": "Uniform",
+  "overprovision": true,
+  "platformFaultDomainCount": 5,
+  "provisioningState": "Succeeded",
+  "resiliencyPolicy": {
+    "resilientVMCreationPolicy": {
+      "enabled": false
+    },
+    "resilientVMDeletionPolicy": {
+      "enabled": false
+    }
+  },
+  "resourceGroup": "tp2_resource_group",
+  "singlePlacementGroup": true,
+  "sku": {
+    "capacity": 2,
+    "name": "Standard_F1als_v7",
+    "tier": "Standard"
+  },
+  "tags": {},
+  "timeCreated": "2026-11-16T04:18:00.7274671+00:00",
+  "type": "Microsoft.Compute/virtualMachineScaleSets",
+  "uniqueId": "fd86de0c-1838-4ad8-a8f5-a19bbc3210d1",
+  "upgradePolicy": {
+    "mode": "Automatic"
+  },
+  "virtualMachineProfile": {
+    "diagnosticsProfile": {
+      "bootDiagnostics": {
+        "enabled": false
+      }
+    },
+    "extensionProfile": {
+      "extensions": [],
+      "extensionsTimeBudget": "PT1H30M"
+    },
+    "networkProfile": {
+      "networkInterfaceConfigurations": [
+        {
+          "disableTcpStateTracking": false,
+          "dnsSettings": {
+            "dnsServers": []
+          },
+          "enableAcceleratedNetworking": false,
+          "enableIPForwarding": false,
+          "ipConfigurations": [
+            {
+              "loadBalancerBackendAddressPools": [
+                {
+                  "id": "/subscriptions/3774fcec-6875-4c33-b945-f38f65242815/resourceGroups/tp2_resource_group/providers/Microsoft.Network/loadBalancers/tp2_lb/backendAddressPools/lb_backend_address_pool",
+                  "resourceGroup": "tp2_resource_group"
+                }
+              ],
+              "name": "node_nic_config",
+              "primary": true,
+              "privateIPAddressVersion": "IPv4",
+              "subnet": {
+                "id": "/subscriptions/3774fcec-6875-4c33-b945-f38f65242815/resourceGroups/tp2_resource_group/providers/Microsoft.Network/virtualNetworks/tp2_network/subnets/tp2_vmss_subnet",
+                "resourceGroup": "tp2_resource_group"
+              }
+            }
+          ],
+          "name": "node_nic",
+          "primary": true
+        }
+      ]
+    },
+    "osProfile": {
+      "adminUsername": "azureuser",
+      "allowExtensionOperations": true,
+      "computerNamePrefix": "tp2vmss",
+      "linuxConfiguration": {
+        "disablePasswordAuthentication": true,
+        "enableVMAgentPlatformUpdates": true,
+        "provisionVMAgent": true,
+        "ssh": {
+          "publicKeys": [
+            {
+              "keyData": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuMXeYZAhXPP8QWTAU++N5nOIJ+5m1LrK1XT58KZHBl+mjXREY1W+8yZCnqcUm698ILkDxsc0owYJAP7qWYe5+H7irQ1dSa+a6SgGC/Aj5IAywRh8OLU3RPCFeqbtGvCe6Z7OeRsCAUYe39LgoHlvaIXkc0DQUfiMxMQOMrbVI1L/nOyDO2Jf+TOChKCcQ6+LyQNNNtec0FbdOMKuUafs1koI9evFSDxB9Utwz20F+TvwZ5DyUreZVBPXE0/t4Xe6DIaYSiCVQHMXXuC0ooJJmrfVSUBRgxs6VuBiCn7KA/RkXGnOekU0y57xyZ0yaJZwvVISfUWMny/cta4gji52qzxDmyt3bq/mApJT0t0vqkbMhb6bdBstONgVfnr0Kh0W9s/mR6jAMOnUBxJMyqBqYyFqDd03wZaB6hnV0U0TEiHt8hno2sd0DFvDMwAfjkEdujPhRbcnmM44+7ZMbbgBMndrSQEpGM1DEGf/shTRRCAKGJMiw42A0h+z+bxG7CCk= generated-by-azure",
+              "path": "/home/azureuser/.ssh/authorized_keys"
+            }
+          ]
+        }
+      },
+      "requireGuestProvisionSignal": true,
+      "secrets": []
+    },
+    "priority": "Regular",
+    "securityProfile": {
+      "securityType": "Standard"
+    },
+    "storageProfile": {
+      "diskControllerType": "NVMe",
+      "imageReference": {
+        "offer": "ubuntu-24_04-lts",
+        "publisher": "Canonical",
+        "sku": "server",
+        "version": "latest"
+      },
+      "osDisk": {
+        "caching": "ReadWrite",
+        "createOption": "FromImage",
+        "diskSizeGB": 30,
+        "managedDisk": {
+          "storageAccountType": "StandardSSD_LRS"
+        },
+        "osType": "Linux",
+        "writeAcceleratorEnabled": false
+      }
+    },
+    "timeCreated": "2026-11-16T04:18:00.7274671+00:00"
+  }
+}
